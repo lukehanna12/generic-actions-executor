@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   plan:
-    if: ${{ github.event.issue.user.id == 105253787 }}
+    if: ${{ github.event.issue.user.login == github.repository_owner }}
     runs-on: ubuntu-24.04
     outputs:
       runner_label: ${{ steps.plan.outputs.runner_label }}
@@ -26,12 +26,12 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Validate opaque request
+      - name: Validate opaque trigger
         id: plan
         env:
           REQUEST_JSON: ${{ github.event.issue.body }}
           REQUEST_TITLE: ${{ github.event.issue.title }}
-        run: node runner/plan.mjs
+        run: node runner/trigger-plan.mjs
 
   execute:
     needs: plan
@@ -67,7 +67,7 @@ jobs:
           AGENTIC_FETCH_INSTALLATION_ID: ${{ secrets.AGENTIC_FETCH_INSTALLATION_ID }}
           AGENTIC_FETCH_APP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_FETCH_APP_PRIVATE_KEY_PEM }}
           MISE_BIN: ${{ runner.temp }}/executor-bin/mise
-        run: node runner/execute.mjs
+        run: node runner/execute-v3.mjs
       - name: Seal result after candidate termination
         id: finalize
         if: ${{ steps.execute.outcome == 'success' }}
@@ -75,7 +75,7 @@ jobs:
           REQUEST_JSON: ${{ github.event.issue.body }}
           REQUEST_TITLE: ${{ github.event.issue.title }}
           AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM }}
-        run: node runner/finalize.mjs
+        run: node runner/finalize-v3.mjs
       - name: Upload encrypted result capsule
         if: ${{ steps.finalize.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
