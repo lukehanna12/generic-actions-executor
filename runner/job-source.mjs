@@ -48,3 +48,30 @@ export async function mintRequestToken({issuer,installationId,privateKeyPem}={})
   validatePermissions(body.permissions);
   return body.token;
 }
+
+
+export async function revokeRequestToken(token){
+  const response=await fetch("https://api.github.com/installation/token",{
+    method:"DELETE",
+    headers:{...H,Authorization:`Bearer ${token}`},
+  });
+  if(response.status!==204)throw new Error("request token revocation failed");
+}
+
+export async function resolveOnlyRequestRepository(token){
+  const response=await fetch(
+    "https://api.github.com/installation/repositories?per_page=2",
+    {headers:{...H,Authorization:`Bearer ${token}`}},
+  );
+  const body=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error("request repository lookup failed");
+  const repositories=Array.isArray(body?.repositories)?body.repositories:[];
+  if(body?.total_count!==1||repositories.length!==1||repositories[0]?.private!==true)
+    throw new Error("request installation is not narrowed to one private repository");
+  const repository=repositories[0];
+  const owner=repository?.owner?.login;
+  const repo=repository?.name;
+  if(typeof owner!=="string"||!owner||typeof repo!=="string"||!repo)
+    throw new Error("request repository identity is invalid");
+  return Object.freeze({owner,repo});
+}
