@@ -1,0 +1,14 @@
+import { randomBytes } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { spawn, execFile } from "node:child_process";
+import { promisify } from "node:util";
+import fs from "node:fs/promises";
+import path from "node:path";
+const exec=promisify(execFile),MAX=4*1024*1024,SAFE="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin";
+function inside(root,rel){const r=path.resolve(root,rel||"."),p=path.resolve(root)+path.sep;if(r!==path.resolve(root)&&!r.startsWith(p))throw new Error("candidate cwd escapes private workspace");return r;}
+async function collect(stream){const chunks=[];let n=0;for await(const c of stream){n+=c.length;if(n>MAX)throw new Error("candidate output exceeded private capture ceiling");chunks.push(c);}return Buffer.concat(chunks).toString("utf8");}
+export class MacCandidateSupervisor{
+ constructor({spawnImpl=spawn,command=exec,now=()=>new Date().toISOString()}={}){this.spawn=spawnImpl;this.command=command;this.now=now;}
+ async preflight(){if(process.platform!=="darwin")throw new Error("macOS supervisor requires Darwin");}
+ async run({workspace,validation_plan}){await this.preflight();const id=`grp_${randomBytes(18).toString("base64url")}`,home=await fs.mkdtemp("/tmp/generic-macos-home-");const uid=String((await this.command("/usr/bin/id",["-u","nobody"])).stdout).trim(),gid=String((await this.command("/usr/bin/id",["-g","nobody"])).stdout).trim();await this.command("/usr/bin/sudo",["-n","/usr/sbin/chown","-R",`${uid}:${gid}`,workspace]);await this.command("/usr/bin/sudo",["-n","/usr/sbin/chown","-R",`${uid}:${gid}`,home]);await fs.chmod(home,0o700);const results=[];try{for(const step of validation_plan.steps){const cwd=inside(workspace,step.cwd||".");const envArgs=[`PATH=${SAFE}`,`HOME=${home}`,`TMPDIR=${home}`,"LANG=C","LC_ALL=C","CI=true","TERM=dumb"];const child=this.spawn("/usr/bin/sudo",["-n","-u","nobody","/usr/bin/env","-i",...envArgs,...step.argv],{cwd,detached:true,stdio:["ignore","pipe","pipe"],env:{PATH:SAFE}});const timer=setTimeout(()=>{try{process.kill(-child.pid,"SIGKILL");}catch{}},Math.min(Number(step.timeout_seconds||900)*1000,3600000));const [stdout,stderr,exit]=await Promise.all([collect(child.stdout),collect(child.stderr),new Promise((res,rej)=>{child.once("error",rej);child.once("close",(code,signal)=>res({code,signal}));})]);clearTimeout(timer);try{process.kill(-child.pid,"SIGKILL");}catch{}results.push({step_id:String(step.step_id),exit_code:Number.isInteger(exit.code)?exit.code:null,signal:exit.signal||null,stdout,stderr});}}finally{await this.command("/usr/bin/sudo",["-n","/usr/sbin/chown","-R",`${process.getuid()}:${process.getgid()}`,workspace]).catch(()=>{});}return Object.freeze({group_id:id,terminated_at:this.now(),result:Object.freeze({outcome:results.every(x=>x.exit_code===0)?"passed":"failed",steps:Object.freeze(results)}),cleanup:async()=>fs.rm(home,{recursive:true,force:true})});}
+}

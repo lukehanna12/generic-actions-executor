@@ -1,0 +1,89 @@
+name: Encrypted public executor
+run-name: Encrypted executor ${{ github.event.issue.title }}
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    if: ${{ github.event.issue.user.id == 105253787 }}
+    runs-on: ubuntu-24.04
+    outputs:
+      runner_label: ${{ steps.plan.outputs.runner_label }}
+      job_id: ${{ steps.plan.outputs.job_id }}
+    steps:
+      - name: Checkout trusted executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Validate opaque request
+        id: plan
+        env:
+          REQUEST_JSON: ${{ github.event.issue.body }}
+          REQUEST_TITLE: ${{ github.event.issue.title }}
+        run: node runner/plan.mjs
+
+  execute:
+    needs: plan
+    runs-on: ${{ needs.plan.outputs.runner_label }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout trusted executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install pinned mise
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/executor-bin"
+          curl -fsSLo "$RUNNER_TEMP/mise-install.sh" "https://github.com/jdx/mise/releases/download/v2026.9.10/install.sh"
+          printf '%s  %s\n' '9936b9658072ab94ff27f965a49166deafd783c74edb68636835d4ed4715f502' "$RUNNER_TEMP/mise-install.sh" | shasum -a 256 -c -
+          MISE_INSTALL_PATH="$RUNNER_TEMP/executor-bin/mise" sh "$RUNNER_TEMP/mise-install.sh"
+          test -x "$RUNNER_TEMP/executor-bin/mise"
+      - name: Execute encrypted private candidate
+        id: execute
+        env:
+          REQUEST_JSON: ${{ github.event.issue.body }}
+          REQUEST_TITLE: ${{ github.event.issue.title }}
+          AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
+          AGENTIC_FETCH_APP_ISSUER: ${{ secrets.AGENTIC_FETCH_APP_ISSUER }}
+          AGENTIC_FETCH_INSTALLATION_ID: ${{ secrets.AGENTIC_FETCH_INSTALLATION_ID }}
+          AGENTIC_FETCH_APP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_FETCH_APP_PRIVATE_KEY_PEM }}
+          MISE_BIN: ${{ runner.temp }}/executor-bin/mise
+        run: node runner/execute.mjs
+      - name: Seal result after candidate termination
+        id: finalize
+        if: ${{ steps.execute.outcome == 'success' }}
+        env:
+          REQUEST_JSON: ${{ github.event.issue.body }}
+          REQUEST_TITLE: ${{ github.event.issue.title }}
+          AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM }}
+        run: node runner/finalize.mjs
+      - name: Upload encrypted result capsule
+        if: ${{ steps.finalize.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: capsule
+          path: capsule.bin
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
