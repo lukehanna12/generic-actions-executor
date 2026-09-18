@@ -12,6 +12,11 @@ function opaqueGroupId() {
   return `grp_${randomBytes(18).toString("base64url")}`;
 }
 
+function unitName(groupId,index) {
+  const safe=groupId.replace(/[^A-Za-z0-9_.-]/g,"-");
+  return `agentic-${safe}-${index}.service`;
+}
+
 function inside(root, relative) {
   const resolved = path.resolve(root, relative || ".");
   const prefix = `${path.resolve(root)}${path.sep}`;
@@ -66,27 +71,69 @@ export class LinuxCandidateSupervisor {
 
   async preflight() {
     await this.command("/usr/bin/sudo", ["-n", "/usr/bin/true"]);
-    await this.command("/usr/bin/test", ["-f", "/sys/fs/cgroup/cgroup.controllers"]);
     await this.command("/usr/bin/test", ["-x", "/usr/bin/setpriv"]);
+    await this.command("/usr/bin/test", ["-x", "/usr/bin/systemd-run"]);
+    await this.command("/usr/bin/test", ["-x", "/usr/bin/systemctl"]);
+    await this.command("/usr/bin/sudo", [
+      "-n", "/usr/bin/systemctl", "show", "--property=Version", "--value",
+    ]);
+  }
+
+  async show(unit, property) {
+    const { stdout } = await this.command("/usr/bin/sudo", [
+      "-n", "/usr/bin/systemctl", "show", unit, `--property=${property}`, "--value",
+    ]);
+    return String(stdout).trim();
+  }
+
+  async killUnit(unit) {
+    await this.command("/usr/bin/sudo", [
+      "-n", "/usr/bin/systemctl", "kill", "--kill-who=all", "--signal=KILL", unit,
+    ]).catch(() => {});
+    await this.command("/usr/bin/sudo", [
+      "-n", "/usr/bin/systemctl", "stop", unit,
+    ]).catch(() => {});
+  }
+
+  async verifyTerminated(unit) {
+    const active = await this.show(unit, "ActiveState").catch(() => "unknown");
+    const mainPid = await this.show(unit, "MainPID").catch(() => "unknown");
+    if (!new Set(["inactive","failed"]).has(active) || mainPid !== "0")
+      throw new Error("candidate systemd unit did not terminate cleanly");
+
+    const cgroup = await this.show(unit, "ControlGroup").catch(() => "");
+    if (cgroup && cgroup.startsWith("/")) {
+      const target = `/sys/fs/cgroup${cgroup}/cgroup.procs`;
+      const { stdout } = await this.command(
+        "/usr/bin/sudo", ["-n", "/bin/cat", target],
+      ).catch(() => ({ stdout: "" }));
+      if (String(stdout).trim())
+        throw new Error("candidate cgroup is not empty after termination");
+    }
   }
 
   async run({ workspace, validation_plan }) {
     if (!validation_plan || !Array.isArray(validation_plan.steps) || validation_plan.steps.length < 1)
       throw new Error("candidate validation plan is invalid");
+
     await this.preflight();
-    const originalUid=String(process.getuid?.() ?? 1001), originalGid=String(process.getgid?.() ?? 1001);
-    await this.command("/usr/bin/sudo", ["-n","/usr/bin/chown","-R","65534:65534",workspace]);
+
+    const originalUid = String(process.getuid?.() ?? 1001);
+    const originalGid = String(process.getgid?.() ?? 1001);
+    await this.command("/usr/bin/sudo", [
+      "-n", "/usr/bin/chown", "-R", "65534:65534", workspace,
+    ]);
+
     const groupId = opaqueGroupId();
-    const cgroup = `/sys/fs/cgroup/${groupId}`;
     const privateDir = await this.fs.mkdtemp("/tmp/generic-capture-");
     await this.fs.chmod(privateDir, 0o700);
     const candidateHome = `/tmp/${groupId}-home`;
 
-    await this.command("/usr/bin/sudo", ["-n", "/usr/bin/mkdir", cgroup]);
     await this.command("/usr/bin/sudo", [
       "-n", "/usr/bin/install", "-d", "-m", "700", "-o", "65534", "-g", "65534",
       candidateHome, `${candidateHome}/tmp`,
     ]);
+
     const results = [];
     try {
       for (const step of validation_plan.steps) {
@@ -95,16 +142,22 @@ export class LinuxCandidateSupervisor {
         const stderrPath = path.join(privateDir, `${results.length}.err`);
         const env = sanitizedEnvironment(candidateHome);
         const envArgs = Object.entries(env).flatMap(([key, value]) => [`${key}=${value}`]);
-        const script = 'echo "$$" > "$1/cgroup.procs"; shift; exec "$@"';
         const argv = Array.isArray(step.argv) ? step.argv.map(String) : [];
         if (argv.length < 1) throw new Error("candidate step argv is empty");
+
+        const unit = unitName(groupId, results.length);
         const child = this.spawn("/usr/bin/sudo", [
           "-n",
-          "/bin/sh",
-          "-c",
-          script,
-          "sh",
-          cgroup,
+          "/usr/bin/systemd-run",
+          "--quiet",
+          "--wait",
+          "--pipe",
+          `--unit=${unit}`,
+          "--property=Type=exec",
+          "--property=KillMode=control-group",
+          "--property=NoNewPrivileges=yes",
+          "--property=UMask=0077",
+          `--property=WorkingDirectory=${cwd}`,
           "/usr/bin/setpriv",
           "--reuid=65534",
           "--regid=65534",
@@ -117,52 +170,56 @@ export class LinuxCandidateSupervisor {
           ...envArgs,
           ...argv,
         ], {
-          cwd,
           stdio: ["ignore", "pipe", "pipe"],
           env: { PATH: SAFE_PATH },
         });
 
         const timeoutMs = Math.min(Number(step.timeout_seconds || 900) * 1000, 3600 * 1000);
+        let timedOut = false;
         const timer = setTimeout(() => {
-          this.command("/usr/bin/sudo", ["-n", "/bin/sh", "-c", `echo 1 > ${cgroup}/cgroup.kill`]).catch(() => {});
+          timedOut = true;
+          this.killUnit(unit).catch(() => {});
         }, timeoutMs);
+
         const output = Promise.all([
           capture(child.stdout, stdoutPath),
           capture(child.stderr, stderrPath),
         ]);
+
         const exit = await new Promise((resolve, reject) => {
           child.once("error", reject);
           child.once("close", (code, signal) => resolve({ code, signal }));
         });
+
         clearTimeout(timer);
         await output;
+
+        if (timedOut)
+          await this.killUnit(unit);
+
+        await this.verifyTerminated(unit);
+
+        const statusText = await this.show(unit, "ExecMainStatus").catch(() => "");
+        const status = /^[0-9]+$/.test(statusText) ? Number(statusText) : null;
+        await this.command("/usr/bin/sudo", [
+          "-n", "/usr/bin/systemctl", "reset-failed", unit,
+        ]).catch(() => {});
+
         results.push({
           step_id: String(step.step_id),
-          exit_code: Number.isInteger(exit.code) ? exit.code : null,
+          exit_code: Number.isInteger(status) ? status : (Number.isInteger(exit.code) ? exit.code : null),
           signal: exit.signal || null,
           stdout: await this.fs.readFile(stdoutPath, "utf8"),
           stderr: await this.fs.readFile(stderrPath, "utf8"),
         });
       }
     } finally {
-      await this.command("/usr/bin/sudo", ["-n", "/bin/sh", "-c", `echo 1 > ${cgroup}/cgroup.kill`]).catch(() => {});
-      let empty = false;
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        const { stdout } = await this.command(
-          "/usr/bin/sudo",
-          ["-n", "/bin/cat", `${cgroup}/cgroup.procs`],
-        ).catch(() => ({ stdout: "unknown" }));
-        if (!String(stdout).trim()) {
-          empty = true;
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-      if (!empty)
-        throw new Error("candidate cgroup is not empty after termination");
-      await this.command("/usr/bin/sudo", ["-n", "/usr/bin/rmdir", cgroup]);
-      await this.command("/usr/bin/sudo", ["-n", "/bin/rm", "-rf", candidateHome]);
-      await this.command("/usr/bin/sudo", ["-n","/usr/bin/chown","-R",`${originalUid}:${originalGid}`,workspace]).catch(() => {});
+      await this.command("/usr/bin/sudo", [
+        "-n", "/bin/rm", "-rf", candidateHome,
+      ]).catch(() => {});
+      await this.command("/usr/bin/sudo", [
+        "-n", "/usr/bin/chown", "-R", `${originalUid}:${originalGid}`, workspace,
+      ]).catch(() => {});
     }
 
     const passed = results.every(step => step.exit_code === 0);
