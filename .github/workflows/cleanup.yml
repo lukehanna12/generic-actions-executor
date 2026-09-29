@@ -1,4 +1,4 @@
-name: Cleanup expired agentic state
+name: Cleanup expired workspace state
 
 on:
   schedule:
@@ -10,7 +10,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: agentic-retention-cleanup
+  group: workspace-retention-cleanup
   cancel-in-progress: false
 
 jobs:
@@ -30,11 +30,11 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Expire private transient state
+      - name: Expire private workspace state
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
-          AGENTIC_CLEANUP_APP_ISSUER: ${{ secrets.AGENTIC_CLEANUP_APP_ISSUER }}
-          AGENTIC_CLEANUP_INSTALLATION_ID: ${{ secrets.AGENTIC_CLEANUP_INSTALLATION_ID }}
-          AGENTIC_CLEANUP_APP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_CLEANUP_APP_PRIVATE_KEY_PEM }}
+          WORKSPACE_CLEANUP_APP_ISSUER: ${{ secrets.WORKSPACE_CLEANUP_APP_ISSUER }}
+          WORKSPACE_CLEANUP_INSTALLATION_ID: ${{ secrets.WORKSPACE_CLEANUP_INSTALLATION_ID }}
+          WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM: ${{ secrets.WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM }}
         run: node runner/cleanup-private-state.mjs
