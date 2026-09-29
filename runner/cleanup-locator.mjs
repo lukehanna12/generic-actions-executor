@@ -1,6 +1,6 @@
 import { constants, createPrivateKey, privateDecrypt } from "node:crypto";
 import { Buffer } from "node:buffer";
-const MAGIC=Buffer.from("agentic-cleanup-locator-v1\0","utf8");
+const MAGIC=Buffer.from("workspace-cleanup-locator-v1\0","utf8");
 function b64(value,label,min=1,max=4096){if(typeof value!=="string"||!value||value.length>max*2||!/^[A-Za-z0-9_-]+$/.test(value))throw new Error(label+" is invalid");const bytes=Buffer.from(value,"base64url");if(bytes.byteLength<min||bytes.byteLength>max||bytes.toString("base64url")!==value)throw new Error(label+" is invalid");return bytes;}
 function branch(value,label){if(typeof value!=="string"||value.length<1||value.length>128||value.startsWith("/")||value.endsWith("/")||value.includes("..")||/[\x00-\x20~^:?*\[\\]/.test(value)||value.includes("@{"))throw new Error(label+" is invalid");return value;}
 function sha(value){if(typeof value!=="string"||!(/^[0-9a-f]{40}$/i.test(value)||/^[0-9a-f]{64}$/i.test(value)))throw new Error("source_sha is invalid");return value.toLowerCase();}
