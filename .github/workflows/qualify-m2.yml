@@ -1,8 +1,6 @@
 name: Qualify M2 macOS surface
 on:
-  push:
-    branches: [main]
-    paths: [.github/workflows/qualify-m2.yml]
+  workflow_dispatch:
 permissions: {}
 concurrency:
   group: qualify-m2-macos-surface
