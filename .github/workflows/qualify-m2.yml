@@ -1,0 +1,30 @@
+name: Qualify M2 macOS surface
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/qualify-m2.yml]
+permissions: {}
+concurrency:
+  group: qualify-m2-macos-surface
+  cancel-in-progress: true
+jobs:
+  qualify:
+    runs-on: macos-26-xlarge
+    timeout-minutes: 5
+    steps:
+      - name: Measure OS, CPU, GPU and display capabilities
+        shell: bash
+        run: |
+          set -eu
+          sw_vers
+          sysctl -n machdep.cpu.brand_string
+          system_profiler SPDisplaysDataType -json
+          cat > "$RUNNER_TEMP/surface.swift" <<'SWIFT'
+          import AppKit
+          import Metal
+          import CoreGraphics
+          func emit(_ d:[String:Any]) { let b=try! JSONSerialization.data(withJSONObject:d,options:[.sortedKeys]);print(String(data:b,encoding:.utf8)!)}
+          emit(["kind":"metal_devices","devices":MTLCopyAllDevices().map{["name":$0.name,"registryID":String($0.registryID),"lowPower":$0.isLowPower,"unifiedMemory":$0.hasUnifiedMemory]}])
+          emit(["kind":"screens","screens":NSScreen.screens.map{["colorSpace":$0.colorSpace?.localizedName ?? "unknown","currentEDR":$0.maximumExtendedDynamicRangeColorComponentValue,"potentialEDR":$0.maximumPotentialExtendedDynamicRangeColorComponentValue,"backingScale":$0.backingScaleFactor]}])
+          SWIFT
+          xcrun swift "$RUNNER_TEMP/surface.swift"
