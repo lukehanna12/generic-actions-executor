@@ -8,6 +8,10 @@ const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const ALLOWED_ARCHIVE_HOSTS = new Set(["codeload.github.com"]);
 const CHOWN = process.platform === "darwin" ? "/usr/sbin/chown" : "/bin/chown";
 
+export function candidateSourceOwner(platform = process.platform) {
+  return platform === "darwin" ? "nobody:nobody" : "65534:65534";
+}
+
 function sha(value) {
   if (typeof value !== "string" || !/^[0-9a-f]{40}$/.test(value))
     throw new Error("materializer commit must be a lowercase Git SHA");
@@ -119,7 +123,7 @@ export class GitHubArchiveMaterializer {
       ]);
       await this.fs.rm(archivePath, { force: true });
       await this.command("/usr/bin/sudo", [
-        "-n", CHOWN, "-R", "65534:65534", root,
+        "-n", CHOWN, "-R", candidateSourceOwner(), root,
       ]);
       await this.command("/usr/bin/sudo", [
         "-n", "/bin/chmod", "700", root, workspace,
@@ -137,3 +141,4 @@ export class GitHubArchiveMaterializer {
     }
   }
 }
+

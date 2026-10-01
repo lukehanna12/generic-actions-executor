@@ -41,8 +41,9 @@ async function waitForExit(child, timeoutMs) {
   const timeout = new Promise(resolve => {
     timer = setTimeout(() => resolve(null), timeoutMs);
   });
-  const first = await Promise.race([exited, timeout]);
-  clearTimeout(timer);
+  let first;
+  try { first = await Promise.race([exited, timeout]); }
+  finally { clearTimeout(timer); }
   if (first) return { ...first, timed_out: false };
 
   forceKill(child);
@@ -116,9 +117,12 @@ export class MacCandidateSupervisor {
             "-n", "-u", "nobody",
             "/usr/bin/env", "-i",
             ...envArgs,
-            ...argv,
+            "/bin/sh", "-c", 'cd -- "$1" && shift && exec "$@"',
+            "candidate", cwd, ...argv,
           ], {
-            cwd,
+            // The controller cannot traverse the candidate-owned 0700 source.
+            // sudo changes identity before the constant shim enters its cwd.
+            cwd: "/tmp",
             detached: true,
             stdio: ["ignore", stdoutHandle.fd, stderrHandle.fd],
             env: { PATH: SAFE },
@@ -162,3 +166,4 @@ export class MacCandidateSupervisor {
     });
   }
 }
+
