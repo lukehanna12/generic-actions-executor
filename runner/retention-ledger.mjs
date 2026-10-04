@@ -114,8 +114,15 @@ export async function writeRetentionRecord({repository,token,record}){
   await ensureRetentionBranch({repository,token});
   const current=await currentTree(repository,token,RETENTION_BRANCH);
   const path=`${RETENTION_PREFIX}${value.job_id}.json`;
-  if(current.entries.some(x=>x.type==="blob"&&x.path===path))
-    throw new Error("retention record already exists");
+  if(current.entries.some(x=>x.type==="blob"&&x.path===path)){
+    const existing=parseRetentionRecord(await readPath(repository,token,path));
+    if(
+      existing.job_id!==value.job_id||
+      existing.runner_label!==value.runner_label||
+      existing.purge_capsule!==value.purge_capsule
+    )throw new Error("retention record identity conflict");
+    return existing;
+  }
   const blob=await request(repoUrl(repository,"/git/blobs"),{
     token,method:"POST",body:{content:JSON.stringify({
       v:1,
