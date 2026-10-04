@@ -97,6 +97,6 @@ export class LinuxSlimCandidateSupervisor{
     }finally{
       await this.command("/usr/bin/sudo",["-n","/bin/chown","-R",`${originalUid}:${originalGid}`,workspace]).catch(()=>{});
     }
-    return Object.freeze({group_id:id,terminated_at:this.now(),result:Object.freeze({outcome:results.every(x=>x.exit_code===0&&!x.timed_out)?"passed":"failed",steps:Object.freeze(results)}),cleanup:async()=>{await Promise.all([fs.rm(home,{recursive:true,force:true}),fs.rm(capture,{recursive:true,force:true})]);}});
+    return Object.freeze({group_id:id,terminated_at:this.now(),result:Object.freeze({outcome:results.every(x=>x.exit_code===0&&!x.timed_out)?"passed":"failed",steps:Object.freeze(results)}),purge:async()=>{await Promise.all([fs.rm(home,{recursive:true,force:true}),fs.rm(capture,{recursive:true,force:true})]);}});
   }
 }
