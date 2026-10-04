@@ -1,0 +1,41 @@
+name: Temporary workflow-token purge test
+
+on:
+  push:
+    branches: [purge-retention-ledger]
+    paths:
+      - ".github/workflows/workflow-token-purge-test.yml"
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Attempt permanent issue deletion
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node - <<'NODE'
+          const response=await fetch("https://api.github.com/graphql",{
+            method:"POST",
+            headers:{
+              Accept:"application/vnd.github+json",
+              Authorization:"Bearer "+process.env.GITHUB_TOKEN,
+              "Content-Type":"application/json",
+              "X-GitHub-Api-Version":"2026-03-10",
+            },
+            body:JSON.stringify({
+              query:"mutation($id:ID!){deleteIssue(input:{issueId:$id}){repository{id}}}",
+              variables:{id:"I_kwDOUdOAIc8AAAABU9MZCA"},
+            }),
+          });
+          const body=await response.json().catch(()=>null);
+          console.log("status="+response.status);
+          console.log("deleted="+Boolean(body?.data?.deleteIssue?.repository?.id));
+          console.log("errors="+(Array.isArray(body?.errors)?body.errors.map(x=>x.type||x.message).join(","):"none"));
+          if(!response.ok||!body?.data?.deleteIssue?.repository?.id)process.exitCode=1;
+          NODE
