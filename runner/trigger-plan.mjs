@@ -4,16 +4,6 @@ import { RETENTION_MS, writeRetentionRecord } from "./retention-ledger.mjs";
 
 const GRAPHQL=process.env.GITHUB_GRAPHQL_URL||"https://api.github.com/graphql";
 
-const RETIRED_ISSUE_IDS=Object.freeze([
-  "I_kwDOUdOAIc8AAAABR8gOZQ",
-  "I_kwDOUdOAIc8AAAABR86qEg",
-  "I_kwDOUdOAIc8AAAABR87-wA",
-  "I_kwDOUdOAIc8AAAABR89jTw",
-  "I_kwDOUdOAIc8AAAABR9J6Fg",
-  "I_kwDOUdOAIc8AAAABUe4hNQ",
-  "I_kwDOUdOAIc8AAAABU9MZCA",
-]);
-
 function required(value,label){
   if(typeof value!=="string"||!value)throw new Error(label+" is unavailable");
   return value;
@@ -69,9 +59,6 @@ try{
   });
 
   await deleteAcceptedIssue(issueNodeId,issuePurgeToken);
-  for(const retiredIssueId of RETIRED_ISSUE_IDS)
-    await deleteAcceptedIssue(retiredIssueId,issuePurgeToken);
-  console.log(`retired_issue_artifacts_purged count=${RETIRED_ISSUE_IDS.length}`);
 
   const output=process.env.GITHUB_OUTPUT;
   if(!output)throw new Error("GITHUB_OUTPUT is unavailable");
