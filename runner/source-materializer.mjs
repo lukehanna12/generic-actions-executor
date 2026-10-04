@@ -151,7 +151,7 @@ export class GitHubArchiveMaterializer {
       return Object.freeze({
         workspace,
         commit_sha: commit,
-        cleanup: async () => removeRoot(this.command,root),
+        purge: async () => removeRoot(this.command,root),
       });
     } catch (error) {
       await removeRoot(this.command,root).catch(() => {});

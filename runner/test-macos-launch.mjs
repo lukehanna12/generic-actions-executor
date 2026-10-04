@@ -24,7 +24,7 @@ test('controller launches outside candidate cwd; identity change precedes a lite
   const at=launch.args.indexOf('/bin/sh');assert.equal(launch.args[at+2],'cd -- "$1" && shift && exec "$@"');
   assert.deepEqual(launch.args.slice(at+3),['candidate',workspace,'/usr/bin/printf','%s','literal $(touch /tmp/unwanted)']);
   const actual=execFileSync('/bin/sh',launch.args.slice(at+1),{encoding:'utf8'});assert.equal(actual,'literal $(touch /tmp/unwanted)');
- } finally {await r?.cleanup();await fs.rm(workspace,{recursive:true,force:true});}
+ } finally {await r?.purge();await fs.rm(workspace,{recursive:true,force:true});}
 });
 test('spawn failure clears its deadline timer and reports the failure promptly',async()=>{
  const workspace=await fs.mkdtemp(path.join(os.tmpdir(),'launch-test-'));

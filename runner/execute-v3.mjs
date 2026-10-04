@@ -58,8 +58,8 @@ async function runCandidate({request,input,materialized}){
     ]);
     passed("clear_result_staged");
   }finally{
-    await supervised?.cleanup?.().catch(()=>{});
-    await materialized?.cleanup?.().catch(()=>{});
+    await supervised?.purge?.().catch(()=>{});
+    await materialized?.purge?.().catch(()=>{});
   }
 }
 

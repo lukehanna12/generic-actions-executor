@@ -134,6 +134,6 @@ export class WindowsCandidateSupervisor{
       await this.removeGrant(root,username);
       await this.deleteUser(username);
     }
-    return Object.freeze({group_id:id,terminated_at:this.now(),result:Object.freeze({outcome:results.every(x=>x.exit_code===0&&!x.timed_out)?"passed":"failed",steps:Object.freeze(results)}),cleanup:async()=>fs.rm(root,{recursive:true,force:true})});
+    return Object.freeze({group_id:id,terminated_at:this.now(),result:Object.freeze({outcome:results.every(x=>x.exit_code===0&&!x.timed_out)?"passed":"failed",steps:Object.freeze(results)}),purge:async()=>fs.rm(root,{recursive:true,force:true})});
   }
 }

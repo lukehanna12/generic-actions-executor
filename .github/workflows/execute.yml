@@ -12,6 +12,12 @@ jobs:
   plan:
     if: ${{ github.event.issue.user.login == github.repository_owner }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: executor-retention-ledger
+      cancel-in-progress: false
     outputs:
       runner_label: ${{ steps.plan.outputs.runner_label }}
       job_id: ${{ steps.plan.outputs.job_id }}
@@ -26,11 +32,14 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Validate opaque trigger
+      - name: Accept opaque trigger and purge issue
         id: plan
         env:
           REQUEST_JSON: ${{ github.event.issue.body }}
           REQUEST_TITLE: ${{ github.event.issue.title }}
+          REQUEST_NODE_ID: ${{ github.event.issue.node_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_PURGE_TOKEN: ${{ secrets.ISSUE_PURGE_TOKEN }}
         run: node runner/trigger-plan.mjs
 
   execute:

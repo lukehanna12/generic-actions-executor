@@ -157,7 +157,7 @@ export class MacCandidateSupervisor {
         outcome: results.every(x => x.exit_code === 0 && !x.timed_out) ? "passed" : "failed",
         steps: Object.freeze(results),
       }),
-      cleanup: async () => {
+      purge: async () => {
         await Promise.all([
           fs.rm(home, { recursive: true, force: true }),
           fs.rm(capture, { recursive: true, force: true }),

@@ -1,4 +1,4 @@
-name: Cleanup expired workspace state
+name: Purge expired workspace state
 
 on:
   schedule:
@@ -6,15 +6,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write
+  contents: write
 
 concurrency:
-  group: workspace-retention-cleanup
+  group: executor-retention-ledger
   cancel-in-progress: false
 
 jobs:
-  cleanup:
+  purge:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -30,11 +29,11 @@ jobs:
           node-version: "24"
           package-manager-cache: false
 
-      - name: Expire private workspace state
+      - name: Purge expired private workspace state
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
           WORKSPACE_CLEANUP_APP_ISSUER: ${{ secrets.WORKSPACE_CLEANUP_APP_ISSUER }}
           WORKSPACE_CLEANUP_INSTALLATION_ID: ${{ secrets.WORKSPACE_CLEANUP_INSTALLATION_ID }}
           WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM: ${{ secrets.WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM }}
-        run: node runner/cleanup-private-state.mjs
+        run: node runner/purge-private-state.mjs
