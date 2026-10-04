@@ -29,7 +29,7 @@ function inside(root,rel){
   return resolved;
 }
 function userName(){return `gax_${randomBytes(5).toString("hex")}`;}
-function password(){return `Gax!${randomBytes(18).toString("base64url")}aA1`;}
+function password(){return `Gx!${randomBytes(4).toString("hex")}aA1`;}
 async function readBounded(file){const stat=await fs.stat(file);if(stat.size>MAX)throw new Error("candidate output exceeded private capture ceiling");return fs.readFile(file,"utf8");}
 async function sleep(ms){await new Promise(resolve=>setTimeout(resolve,ms));}
 function processExit(child){return new Promise((resolve,reject)=>{child.once("error",reject);child.once("close",(code,signal)=>resolve({code,signal}));});}
