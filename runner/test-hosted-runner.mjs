@@ -6,8 +6,10 @@ import { RUNNERS } from "./request.mjs";
 import { CandidateSupervisorFactory } from "./supervisor-factory.mjs";
 
 const label=process.env.TEST_RUNNER_LABEL||"";
+const mise=process.env.MISE_BIN||"";
 const runner=RUNNERS[label];
 assert.ok(runner,`unknown TEST_RUNNER_LABEL ${label}`);
+assert.ok(mise,"MISE_BIN is required for hosted runner validation");
 const factory=new CandidateSupervisorFactory();
 const supervisor=await factory.forInput(runner);
 const base=process.platform==="win32"?(process.env.RUNNER_TEMP||os.tmpdir()):"/tmp";
@@ -27,12 +29,23 @@ try{
   }else{
     argv=["/usr/bin/printf","%s","runner-smoke"];
   }
-  execution=await supervisor.run({workspace,validation_plan:{plan_id:"hosted-runner-smoke",steps:[{step_id:"smoke",argv,cwd:".",timeout_seconds:30}]}});
+  execution=await supervisor.run({
+    workspace,
+    validation_plan:{
+      plan_id:"hosted-runner-smoke",
+      steps:[
+        {step_id:"mise",argv:[mise,"--version"],cwd:".",timeout_seconds:30},
+        {step_id:"smoke",argv,cwd:".",timeout_seconds:30},
+      ],
+    },
+  });
   if(execution.result.outcome!=="passed")console.error(JSON.stringify(execution.result));
   assert.equal(execution.result.outcome,"passed");
-  assert.equal(execution.result.steps.length,1);
+  assert.equal(execution.result.steps.length,2);
   assert.equal(execution.result.steps[0].exit_code,0);
-  if(runner.os!=="windows"&&label!=="ubuntu-slim")assert.equal(execution.result.steps[0].stdout,"runner-smoke");
+  assert.match(execution.result.steps[0].stdout,/2026\.9\.10/);
+  assert.equal(execution.result.steps[1].exit_code,0);
+  if(runner.os!=="windows"&&label!=="ubuntu-slim")assert.equal(execution.result.steps[1].stdout,"runner-smoke");
   console.log(`hosted_runner_validated label=${label} os=${runner.os} arch=${runner.arch}`);
 }finally{
   await execution?.cleanup?.().catch(()=>{});
