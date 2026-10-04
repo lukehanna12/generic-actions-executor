@@ -32,7 +32,7 @@ function parseLegacyIssue(issue){
   if(!body||typeof body!=="object"||Array.isArray(body)||body.v!==2)return null;
   if(typeof body.job_id!=="string"||body.job_id!==issue.title||!/^j2_[A-Za-z0-9_-]{24,80}$/.test(body.job_id))return null;
   if(typeof body.runner_label!=="string"||!body.runner_label)return null;
-  b64(body.cleanup_capsule);
+  try{b64(body.cleanup_capsule);}catch{return null;}
   const created=Date.parse(issue.created_at||"");
   if(!Number.isFinite(created))throw new Error("legacy issue creation time is invalid");
   return {job_id:body.job_id,runner_label:body.runner_label,created_ms:created,cleanup_capsule:body.cleanup_capsule};
