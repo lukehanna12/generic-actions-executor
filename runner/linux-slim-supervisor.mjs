@@ -85,7 +85,10 @@ export class LinuxSlimCandidateSupervisor{
         const argv=Array.isArray(step.argv)?step.argv.map(String):[];if(!argv.length)throw new Error("candidate step argv is empty");
         const before=await uidProcesses();let exit;
         try{
-          const child=this.spawn("/usr/bin/sudo",["-n","-u","nobody","/usr/bin/env","-i",...envArgs,...argv],{cwd,detached:true,stdio:["ignore",stdoutHandle.fd,stderrHandle.fd],env:{PATH:SAFE}});
+          const child=this.spawn("/usr/bin/sudo",[
+            "-n","-u","nobody","/usr/bin/env","-i",...envArgs,
+            "/bin/sh","-c",'cd -- "$1" && shift && exec "$@"',"candidate",cwd,...argv
+          ],{cwd:"/tmp",detached:true,stdio:["ignore",stdoutHandle.fd,stderrHandle.fd],env:{PATH:SAFE}});
           exit=await waitForExit(child,Math.min(Number(step.timeout_seconds||900)*1000,3600000));
         }finally{await stdoutHandle.close();await stderrHandle.close();}
         await this.purgeNewNobodyProcesses(before);
