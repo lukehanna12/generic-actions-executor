@@ -1,0 +1,71 @@
+name: Runner expansion validation
+
+on:
+  push:
+    branches: [runner-expansion-validation]
+
+permissions:
+  contents: read
+
+jobs:
+  registry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: node runner/test-runner-registry.mjs
+      - name: Syntax-check executor modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in runner/*.mjs; do node --check "$file"; done
+
+  hosted-runners:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-22.04
+          - ubuntu-22.04-arm
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - ubuntu-26.04
+          - ubuntu-26.04-arm
+          - ubuntu-slim
+          - macos-14
+          - macos-15
+          - macos-15-intel
+          - macos-26
+          - macos-26-intel
+          - xcode-27
+          - windows-2022
+          - windows-2025
+          - windows-2025-vs2026
+          - windows-11-arm
+          - windows-11-vs2026-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install and verify pinned mise
+        id: mise
+        run: node runner/install-mise.mjs
+      - name: Validate host identity, pinned mise, and candidate supervisor
+        env:
+          TEST_RUNNER_LABEL: ${{ matrix.runner }}
+          MISE_BIN: ${{ steps.mise.outputs.mise_bin }}
+        run: node runner/test-hosted-runner.mjs
