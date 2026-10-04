@@ -1,51 +1,56 @@
 name: Encrypted public executor
-run-name: Encrypted executor ${{ github.event.issue.title }}
+run-name: Encrypted executor ${{ github.sha }}
 
 on:
-  issues:
-    types: [opened]
+  push:
+    branches:
+      - executor/broker-dev
+    paths:
+      - "in/*.bin"
 
 permissions:
   contents: read
 
 jobs:
   plan:
-    if: ${{ github.event.issue.user.login == github.repository_owner }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
     concurrency:
-      group: executor-retention-ledger
+      group: executor-broker-retention
       cancel-in-progress: false
     outputs:
       runner_label: ${{ steps.plan.outputs.runner_label }}
-      job_id: ${{ steps.plan.outputs.job_id }}
+      transport_id: ${{ steps.plan.outputs.transport_id }}
+      input_path: ${{ steps.plan.outputs.input_path }}
+      active_jobs: ${{ steps.plan.outputs.active_jobs }}
     steps:
       - name: Checkout trusted executor
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-          fetch-depth: 1
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '24'
+          node-version: "24"
           package-manager-cache: false
-      - name: Accept opaque trigger and purge issue
+      - name: Accept encrypted repository job
         id: plan
         env:
-          REQUEST_JSON: ${{ github.event.issue.body }}
-          REQUEST_TITLE: ${{ github.event.issue.title }}
-          REQUEST_NODE_ID: ${{ github.event.issue.node_id }}
+          BROKER_BRANCH: executor/broker-dev
+          BROKER_BASELINE_BRANCH: repo-broker-dev
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_PURGE_TOKEN: ${{ secrets.ISSUE_PURGE_TOKEN }}
-        run: node runner/trigger-plan.mjs
+          AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
+        run: node runner/broker-plan.mjs
 
   execute:
     needs: plan
     runs-on: ${{ needs.plan.outputs.runner_label }}
     timeout-minutes: 60
+    permissions:
+      contents: write
     steps:
       - name: Checkout trusted executor
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -55,38 +60,18 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: '24'
+          node-version: "24"
           package-manager-cache: false
       - name: Install pinned mise
         id: mise
         run: node runner/install-mise.mjs
-      - name: Execute encrypted private candidate
-        id: execute
+      - name: Execute encrypted repository job
         env:
-          REQUEST_JSON: ${{ github.event.issue.body }}
-          REQUEST_TITLE: ${{ github.event.issue.title }}
+          BROKER_BRANCH: executor/broker-dev
+          BROKER_TRANSPORT_ID: ${{ needs.plan.outputs.transport_id }}
+          BROKER_INPUT_PATH: ${{ needs.plan.outputs.input_path }}
+          BROKER_ACTIVE_JOBS: ${{ needs.plan.outputs.active_jobs }}
+          GITHUB_TOKEN: ${{ github.token }}
           AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
-          AGENTIC_FETCH_APP_ISSUER: ${{ secrets.AGENTIC_FETCH_APP_ISSUER }}
-          AGENTIC_FETCH_INSTALLATION_ID: ${{ secrets.AGENTIC_FETCH_INSTALLATION_ID }}
-          AGENTIC_FETCH_APP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_FETCH_APP_PRIVATE_KEY_PEM }}
           MISE_BIN: ${{ steps.mise.outputs.mise_bin }}
-        run: node runner/execute-v3.mjs
-      - name: Seal result after candidate termination
-        id: finalize
-        if: ${{ steps.execute.outcome == 'success' }}
-        env:
-          REQUEST_JSON: ${{ github.event.issue.body }}
-          REQUEST_TITLE: ${{ github.event.issue.title }}
-          AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_RESULT_UNWRAP_PRIVATE_KEY_PEM }}
-        run: node runner/finalize-v3.mjs
-      - name: Upload encrypted result capsule
-        if: ${{ steps.finalize.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: capsule
-          path: capsule.bin
-          if-no-files-found: error
-          retention-days: 7
-          compression-level: 0
-          overwrite: false
-          include-hidden-files: false
+        run: node runner/execute-v4.mjs

@@ -1,4 +1,4 @@
-name: Purge expired workspace state
+name: Purge expired executor state
 
 on:
   schedule:
@@ -37,3 +37,9 @@ jobs:
           WORKSPACE_CLEANUP_INSTALLATION_ID: ${{ secrets.WORKSPACE_CLEANUP_INSTALLATION_ID }}
           WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM: ${{ secrets.WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM }}
         run: node runner/purge-private-state.mjs
+
+      - name: Purge expired repository broker state
+        if: ${{ always() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node runner/purge-broker-state.mjs
