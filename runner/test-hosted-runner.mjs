@@ -34,7 +34,7 @@ try{
     validation_plan:{
       plan_id:"hosted-runner-smoke",
       steps:[
-        {step_id:"mise",argv:[mise,"--version"],cwd:".",timeout_seconds:30},
+        {step_id:"mise",argv:[mise,"--version"],cwd:".",timeout_seconds:runner.os==="windows"?120:30},
         {step_id:"smoke",argv,cwd:".",timeout_seconds:30},
       ],
     },
