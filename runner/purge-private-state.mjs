@@ -139,12 +139,17 @@ async function resetWorkspaceIfSafe({repository,token,locator,baselineSha,allowR
 }
 async function purgeRecord(item,allItems){
   const locator=item.locator;
+  const isLater=o=>
+    o.record.accepted_ms>item.record.accepted_ms||
+    (
+      o.record.accepted_ms===item.record.accepted_ms&&
+      o.record.job_id.localeCompare(item.record.job_id)>0
+    );
   const newerRepo=allItems.some(o=>
-    o.record.accepted_ms>item.record.accepted_ms&&
-    o.locator.repository_id===locator.repository_id
+    isLater(o)&&o.locator.repository_id===locator.repository_id
   );
   const newerWorkspace=allItems.some(o=>
-    o.record.accepted_ms>item.record.accepted_ms&&
+    isLater(o)&&
     o.locator.repository_id===locator.repository_id&&
     o.locator.source_branch===locator.source_branch
   );
@@ -197,9 +202,7 @@ async function main(){
     let locator;
     try{locator=openPurgeLocator(unwrapKey,record.purge_capsule);}
     catch{
-      console.error(`purge_locator_rejected job=${record.job_id}`);
-      process.exitCode=1;
-      continue;
+      throw new Error(`purge locator rejected for job ${record.job_id}`);
     }
     items.push({record,locator});
   }
@@ -221,6 +224,7 @@ async function main(){
     }catch{
       console.error(`retention_purge_failed job=${item.record.job_id}`);
       process.exitCode=1;
+      break;
     }
   }
 
