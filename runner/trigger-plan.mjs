@@ -53,29 +53,7 @@ async function listRepositoryIssues(repository,token){
   return out;
 }
 
-async function deleteIssueBatch(rows,token){
-  if(rows.length===0)return;
-  const declarations=rows.map((_,i)=>`$id${i}:ID!`).join(",");
-  const selections=rows.map((_,i)=>
-    `d${i}:deleteIssue(input:{issueId:$id${i}}){repository{id}}`
-  ).join(" ");
-  const variables=Object.fromEntries(rows.map((row,i)=>[`id${i}`,row.node_id]));
-  const response=await fetch(GRAPHQL,{
-    method:"POST",
-    headers:{...issueHeaders(token),"Content-Type":"application/json"},
-    body:JSON.stringify({
-      query:`mutation(${declarations}){${selections}}`,
-      variables,
-    }),
-  });
-  const body=await response.json().catch(()=>null);
-  if(!response.ok||!body||Array.isArray(body.errors)&&body.errors.length)
-    throw new Error("retained trigger backlog deletion failed");
-  for(let i=0;i<rows.length;i++){
-    if(typeof body?.data?.[`d${i}`]?.repository?.id!=="string")
-      throw new Error("retained trigger backlog deletion response is invalid");
-  }
-}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 
 async function purgeRetainedTriggerBacklog(repository,ledgerToken,issueToken){
   const records=await listRetentionRecords({repository,token:ledgerToken});
@@ -88,9 +66,13 @@ async function purgeRetainedTriggerBacklog(repository,ledgerToken,issueToken){
     retained.has(issue.title)&&
     typeof issue.node_id==="string"
   );
-  for(let i=0;i<targets.length;i+=20)
-    await deleteIssueBatch(targets.slice(i,i+20),issueToken);
-  console.log(`retained_trigger_backlog_purged count=${targets.length}`);
+  let purged=0;
+  for(const issue of targets){
+    await deleteAcceptedIssue(issue.node_id,issueToken);
+    purged++;
+    await sleep(750);
+  }
+  console.log(`retained_trigger_backlog_purged count=${purged}`);
 }
 
 try{
