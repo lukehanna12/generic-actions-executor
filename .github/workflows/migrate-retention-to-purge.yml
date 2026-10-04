@@ -3,8 +3,6 @@ name: Temporary purge retention migration
 on:
   push:
     branches: [purge-retention-ledger]
-    paths:
-      - ".github/workflows/migrate-retention-to-purge.yml"
 
 permissions:
   contents: write
