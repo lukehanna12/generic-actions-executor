@@ -91,4 +91,4 @@ async function main(){
   }
   console.log(`purge_migration_complete migrated=${migrated} skipped=${skipped}`);
 }
-main().catch(()=>{console.error("purge_migration_failed");process.exitCode=1;});
+main().catch(error=>{console.error("purge_migration_failed: "+error.message);process.exitCode=1;});
