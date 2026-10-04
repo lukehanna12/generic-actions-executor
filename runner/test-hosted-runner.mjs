@@ -48,6 +48,6 @@ try{
   if(runner.os!=="windows"&&label!=="ubuntu-slim")assert.equal(execution.result.steps[1].stdout,"runner-smoke");
   console.log(`hosted_runner_validated label=${label} os=${runner.os} arch=${runner.arch}`);
 }finally{
-  await execution?.cleanup?.().catch(()=>{});
+  await execution?.purge?.().catch(()=>{});
   await fs.rm(workspace,{recursive:true,force:true}).catch(()=>{});
 }
