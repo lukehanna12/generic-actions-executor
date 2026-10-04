@@ -111,7 +111,8 @@ export class GitHubArchiveMaterializer {
       throw new Error("materializer clock is invalid");
     const descriptor = validateArchiveDescriptor(archive, commit, nowMs);
 
-    const materializationBase=process.platform==="win32"?(process.env.RUNNER_TEMP||os.tmpdir()):"/tmp";\n    const root = await this.fs.mkdtemp(path.join(materializationBase,"generic-source-"));
+    const materializationBase=process.platform==="win32"?(process.env.RUNNER_TEMP||os.tmpdir()):"/tmp";
+    const root = await this.fs.mkdtemp(path.join(materializationBase,"generic-source-"));
     if(process.platform==="win32")await restrictWindowsTree(root);
     else await this.fs.chmod(root, 0o700);
     const archivePath = path.join(root, "source.tar.gz");
