@@ -1,0 +1,39 @@
+name: Purge expired workspace state
+
+on:
+  schedule:
+    - cron: "37 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: executor-retention-ledger
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted executor
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          package-manager-cache: false
+
+      - name: Purge expired private workspace state
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM: ${{ secrets.AGENTIC_INPUT_UNWRAP_PRIVATE_KEY_PEM }}
+          WORKSPACE_PURGE_APP_ISSUER: ${{ secrets.WORKSPACE_PURGE_APP_ISSUER }}
+          WORKSPACE_PURGE_INSTALLATION_ID: ${{ secrets.WORKSPACE_PURGE_INSTALLATION_ID }}
+          WORKSPACE_PURGE_APP_PRIVATE_KEY_PEM: ${{ secrets.WORKSPACE_PURGE_APP_PRIVATE_KEY_PEM }}
+        run: node runner/purge-private-state.mjs
