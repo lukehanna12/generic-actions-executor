@@ -46,10 +46,10 @@ function mask(v){
 }
 async function mintPurgeToken(repositoryId){
   const jwt=appJwt({
-    issuer:required(process.env.WORKSPACE_PURGE_APP_ISSUER,"purge app issuer"),
-    privateKeyPem:required(process.env.WORKSPACE_PURGE_APP_PRIVATE_KEY_PEM,"purge app private key"),
+    issuer:required(process.env.WORKSPACE_CLEANUP_APP_ISSUER,"purge app issuer"),
+    privateKeyPem:required(process.env.WORKSPACE_CLEANUP_APP_PRIVATE_KEY_PEM,"purge app private key"),
   });
-  const installationId=positive(process.env.WORKSPACE_PURGE_INSTALLATION_ID,"purge installation ID");
+  const installationId=positive(process.env.WORKSPACE_CLEANUP_INSTALLATION_ID,"purge installation ID");
   const body=await request(`${API}/app/installations/${installationId}/access_tokens`,{
     token:jwt,
     method:"POST",
