@@ -6,11 +6,20 @@ export const RUNNERS=Object.freeze({
   "ubuntu-22.04-arm":Object.freeze({provider:"github-hosted",os:"linux",version:"22.04",arch:"arm64",label:"ubuntu-22.04-arm"}),
   "ubuntu-24.04":Object.freeze({provider:"github-hosted",os:"linux",version:"24.04",arch:"x64",label:"ubuntu-24.04"}),
   "ubuntu-24.04-arm":Object.freeze({provider:"github-hosted",os:"linux",version:"24.04",arch:"arm64",label:"ubuntu-24.04-arm"}),
+  "ubuntu-26.04":Object.freeze({provider:"github-hosted",os:"linux",version:"26.04",arch:"x64",label:"ubuntu-26.04"}),
+  "ubuntu-26.04-arm":Object.freeze({provider:"github-hosted",os:"linux",version:"26.04",arch:"arm64",label:"ubuntu-26.04-arm"}),
+  "ubuntu-slim":Object.freeze({provider:"github-hosted",os:"linux",version:"24.04",arch:"x64",label:"ubuntu-slim"}),
   "macos-14":Object.freeze({provider:"github-hosted",os:"macos",version:"14",arch:"arm64",label:"macos-14"}),
   "macos-15":Object.freeze({provider:"github-hosted",os:"macos",version:"15",arch:"arm64",label:"macos-15"}),
   "macos-15-intel":Object.freeze({provider:"github-hosted",os:"macos",version:"15",arch:"x64",label:"macos-15-intel"}),
   "macos-26":Object.freeze({provider:"github-hosted",os:"macos",version:"26",arch:"arm64",label:"macos-26"}),
-  "macos-26-intel":Object.freeze({provider:"github-hosted",os:"macos",version:"26",arch:"x64",label:"macos-26-intel"})
+  "macos-26-intel":Object.freeze({provider:"github-hosted",os:"macos",version:"26",arch:"x64",label:"macos-26-intel"}),
+  "xcode-27":Object.freeze({provider:"github-hosted",os:"macos",version:"27",arch:"arm64",label:"xcode-27"}),
+  "windows-2022":Object.freeze({provider:"github-hosted",os:"windows",version:"2022",arch:"x64",label:"windows-2022"}),
+  "windows-2025":Object.freeze({provider:"github-hosted",os:"windows",version:"2025",arch:"x64",label:"windows-2025"}),
+  "windows-2025-vs2026":Object.freeze({provider:"github-hosted",os:"windows",version:"2025",arch:"x64",label:"windows-2025-vs2026"}),
+  "windows-11-arm":Object.freeze({provider:"github-hosted",os:"windows",version:"11",arch:"arm64",label:"windows-11-arm"}),
+  "windows-11-vs2026-arm":Object.freeze({provider:"github-hosted",os:"windows",version:"11",arch:"arm64",label:"windows-11-vs2026-arm"})
 });
 function text(v,label,max){if(typeof v!=="string"||!v||v.length>max)throw new Error(label+" is invalid");return v;}
 function b64(v,label,min=1,max=65536){text(v,label,max);if(!/^[A-Za-z0-9_-]+$/.test(v))throw new Error(label+" must be base64url");const b=Buffer.from(v,"base64url");if(b.length<min||b.length>max||b.toString("base64url")!==v)throw new Error(label+" encoding is invalid");return b;}

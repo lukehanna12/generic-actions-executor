@@ -1,15 +1,19 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
+import { restrictWindowsTree } from "./windows-acl.mjs";
 
 const execFileAsync = promisify(execFile);
 const MAX_ARCHIVE_BYTES = 256 * 1024 * 1024;
 const ALLOWED_ARCHIVE_HOSTS = new Set(["codeload.github.com"]);
-const CHOWN = process.platform === "darwin" ? "/usr/sbin/chown" : "/bin/chown";
 
 export function candidateSourceOwner(platform = process.platform) {
-  return platform === "darwin" ? "nobody:nobody" : "65534:65534";
+  if (platform === "darwin") return "nobody:nobody";
+  if (platform === "linux") return "65534:65534";
+  if (platform === "win32") return null;
+  throw new Error("unsupported materializer platform");
 }
 
 function sha(value) {
@@ -38,14 +42,29 @@ function validateArchiveDescriptor(archive, expectedCommit, nowMs) {
 }
 
 function validateTarList(text) {
-  const entries = String(text).split("\n").filter(Boolean);
+  const entries = String(text).split(/\r?\n/).filter(Boolean);
   if (entries.length < 1)
     throw new Error("source archive is empty");
   for (const entry of entries) {
-    if (entry.startsWith("/") || entry.split("/").includes(".."))
+    const normalized=entry.replaceAll("\\","/");
+    if (/^(?:[A-Za-z]:)?\//.test(normalized) || normalized.split("/").includes(".."))
       throw new Error("source archive contains an unsafe path");
   }
   return entries;
+}
+
+function tarBinary(platform=process.platform){
+  if(platform!=="win32")return "/usr/bin/tar";
+  const root=process.env.SystemRoot||process.env.WINDIR||"C:\\Windows";
+  return path.join(root,"System32","tar.exe");
+}
+
+async function removeRoot(command,root){
+  if(process.platform==="win32"){
+    await fs.rm(root,{recursive:true,force:true});
+    return;
+  }
+  await command("/usr/bin/sudo",["-n","/bin/rm","-rf",root]);
 }
 
 export class GitHubArchiveMaterializer {
@@ -92,53 +111,50 @@ export class GitHubArchiveMaterializer {
       throw new Error("materializer clock is invalid");
     const descriptor = validateArchiveDescriptor(archive, commit, nowMs);
 
-    const root = await this.fs.mkdtemp("/tmp/generic-source-");
-    await this.fs.chmod(root, 0o700);
+    const root = await this.fs.mkdtemp(path.join(os.tmpdir(),"generic-source-"));
+    if(process.platform==="win32")await restrictWindowsTree(root);
+    else await this.fs.chmod(root, 0o700);
     const archivePath = path.join(root, "source.tar.gz");
     const workspace = path.join(root, "workspace");
     await this.fs.mkdir(workspace, { mode: 0o700 });
 
     try {
       await this.download(descriptor.url, archivePath);
-      const listed = await this.command("/usr/bin/tar", ["-tzf", archivePath], {
+      const tar=tarBinary();
+      const listed = await this.command(tar, ["-tzf", archivePath], {
         maxBuffer: 16 * 1024 * 1024,
       });
       validateTarList(listed.stdout);
 
-      const verbose = await this.command("/usr/bin/tar", ["-tvzf", archivePath], {
+      const verbose = await this.command(tar, ["-tvzf", archivePath], {
         maxBuffer: 32 * 1024 * 1024,
       });
-      for (const line of String(verbose.stdout).split("\n").filter(Boolean)) {
+      for (const line of String(verbose.stdout).split(/\r?\n/).filter(Boolean)) {
         const type = line[0];
         if (type === "l" || type === "h")
           throw new Error("source archive contains a symbolic or hard link");
       }
 
-      await this.command("/usr/bin/tar", [
-        "-xzf", archivePath,
-        "--strip-components=1",
-        "--no-same-owner",
-        "--no-same-permissions",
-        "-C", workspace,
-      ]);
+      const args=["-xzf", archivePath,"--strip-components=1","-C",workspace];
+      if(process.platform!=="win32")args.splice(3,0,"--no-same-owner","--no-same-permissions");
+      await this.command(tar,args);
       await this.fs.rm(archivePath, { force: true });
-      await this.command("/usr/bin/sudo", [
-        "-n", CHOWN, "-R", candidateSourceOwner(), root,
-      ]);
-      await this.command("/usr/bin/sudo", [
-        "-n", "/bin/chmod", "700", root, workspace,
-      ]);
+
+      const owner=candidateSourceOwner();
+      if(owner){
+        const chown=process.platform==="darwin"?"/usr/sbin/chown":"/bin/chown";
+        await this.command("/usr/bin/sudo", ["-n", chown, "-R", owner, root]);
+        await this.command("/usr/bin/sudo", ["-n", "/bin/chmod", "700", root, workspace]);
+      }
+
       return Object.freeze({
         workspace,
         commit_sha: commit,
-        cleanup: async () => {
-          await this.command("/usr/bin/sudo", ["-n", "/bin/rm", "-rf", root]);
-        },
+        cleanup: async () => removeRoot(this.command,root),
       });
     } catch (error) {
-      await this.command("/usr/bin/sudo", ["-n", "/bin/rm", "-rf", root]).catch(() => {});
+      await removeRoot(this.command,root).catch(() => {});
       throw error;
     }
   }
 }
-
