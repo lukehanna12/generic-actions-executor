@@ -26,7 +26,7 @@ function verifyWindows(runner,identity){
   const server=/server/i.test(identity.installationType);
   if(runner.version==="2022"&&(!server||identity.build!=="20348"))throw new Error("runner Windows Server 2022 version mismatch");
   if(runner.version==="2025"&&(!server||identity.build!=="26100"))throw new Error("runner Windows Server 2025 version mismatch");
-  if(runner.version==="11"&&(server||identity.build!=="26100"))throw new Error("runner Windows 11 version mismatch");
+  if(runner.version==="11"&&(server||identity.build!=="26200"))throw new Error("runner Windows 11 version mismatch");
 }
 export class CandidateSupervisorFactory{
   async forInput(runner){
