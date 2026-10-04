@@ -39,9 +39,11 @@ async function main(){
   const key=`${process.platform}-${process.arch}`;
   const asset=ASSETS[key];
   if(!asset)throw new Error(`unsupported mise platform ${key}`);
-  const root=path.join(process.env.RUNNER_TEMP||os.tmpdir(),"executor-bin");
+  const root=process.platform==="win32"
+    ? path.join(process.env.RUNNER_TEMP||os.tmpdir(),"executor-bin")
+    : "/tmp/generic-executor-bin";
   await fs.rm(root,{recursive:true,force:true});
-  await fs.mkdir(root,{recursive:true,mode:0o700});
+  await fs.mkdir(root,{recursive:true,mode:process.platform==="win32"?0o700:0o755});
   const name=process.platform==="win32"?"mise.exe":"mise";
   const target=path.join(root,name);
   const url=`https://github.com/jdx/mise/releases/download/v${VERSION}/${asset.name}`;
