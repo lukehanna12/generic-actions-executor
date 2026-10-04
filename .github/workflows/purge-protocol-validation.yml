@@ -36,10 +36,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if grep -Rni --exclude-dir=.git 'cleanup' .; then
-            echo "legacy terminology remains"
+          legacy="cle""anup"
+          if grep -Rni --exclude-dir=.git "$legacy" .; then
+            echo "legacy terminology remains in file content"
             exit 1
           fi
-          test ! -e runner/cleanup-locator.mjs
-          test ! -e runner/cleanup-private-state.mjs
-          test ! -e .github/workflows/cleanup.yml
+          if find . -path ./.git -prune -o -iname "*${legacy}*" -print | grep -q .; then
+            echo "legacy terminology remains in a path"
+            exit 1
+          fi
