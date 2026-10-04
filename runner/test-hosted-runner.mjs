@@ -10,7 +10,8 @@ const runner=RUNNERS[label];
 assert.ok(runner,`unknown TEST_RUNNER_LABEL ${label}`);
 const factory=new CandidateSupervisorFactory();
 const supervisor=await factory.forInput(runner);
-const workspace=await fs.mkdtemp(path.join(process.env.RUNNER_TEMP||os.tmpdir(),"gax-smoke-workspace-"));
+const base=process.platform==="win32"?(process.env.RUNNER_TEMP||os.tmpdir()):"/tmp";
+const workspace=await fs.mkdtemp(path.join(base,"gax-smoke-workspace-"));
 let execution;
 try{
   let argv;
@@ -27,6 +28,7 @@ try{
     argv=["/usr/bin/printf","%s","runner-smoke"];
   }
   execution=await supervisor.run({workspace,validation_plan:{plan_id:"hosted-runner-smoke",steps:[{step_id:"smoke",argv,cwd:".",timeout_seconds:30}]}});
+  if(execution.result.outcome!=="passed")console.error(JSON.stringify(execution.result));
   assert.equal(execution.result.outcome,"passed");
   assert.equal(execution.result.steps.length,1);
   assert.equal(execution.result.steps[0].exit_code,0);
