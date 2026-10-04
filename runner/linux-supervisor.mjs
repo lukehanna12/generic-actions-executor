@@ -230,7 +230,7 @@ export class LinuxCandidateSupervisor {
         outcome: passed ? "passed" : "failed",
         steps: Object.freeze(results),
       }),
-      cleanup: async () => this.fs.rm(privateDir, { recursive: true, force: true }),
+      purge: async () => this.fs.rm(privateDir, { recursive: true, force: true }),
     });
   }
 }
